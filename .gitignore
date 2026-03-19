@@ -9,6 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
+user-data
+
 # Logs
 logs
 *.log

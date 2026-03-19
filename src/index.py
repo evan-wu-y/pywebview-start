@@ -12,6 +12,8 @@ from pathlib import Path
 from time import time
 from typing import Callable, TypedDict
 
+from playwright.async_api import async_playwright
+
 import webview
 
 
@@ -42,6 +44,7 @@ class TaskState:
     def __init__(self) -> None:
         self.status = TaskStatus.IDLE
         self._window: webview.Window | None = None
+        self._closing = False
 
     def attach_window(self, window: webview.Window) -> None:
         self._window = window
@@ -49,24 +52,28 @@ class TaskState:
         self._window.state.task_log = ""
         self._window.state.task_progress = 0
         self._window.state.ticker = int(time())
+        self._closing = False
+
+    def begin_closing(self) -> None:
+        self._closing = True
 
     def set_status(self, status: str) -> None:
         self.status = status
-        if self._window is not None:
+        if self._window is not None and not self._closing:
             self._window.state.task_status = status
 
     def set_progress(self, value: int) -> None:
-        if self._window is not None:
+        if self._window is not None and not self._closing:
             self._window.state.task_progress = value
 
     def log(self, message: str) -> None:
-        if self._window is None:
+        if self._window is None or self._closing:
             return
         current = self._window.state.task_log or ""
         self._window.state.task_log = f"{current}{message}\n"
 
     def clear_log(self) -> None:
-        if self._window is None:
+        if self._window is None or self._closing:
             return
         self._window.state.task_log = ""
 
@@ -76,14 +83,24 @@ async def run_heavy_task(
     report_progress: Callable[[int], None],
     log: Callable[[str], None],
 ) -> None:
-    total_steps = 10
+    # total_steps = 10
     log(f"Task started: {task_name}")
-    for step in range(1, total_steps + 1):
-        # Simulate async heavy work. Replace this part with real Playwright logic.
-        await asyncio.sleep(100)
-        progress = int(step * 100 / total_steps)
-        report_progress(progress)
-        log(f"[{task_name}] step {step}/{total_steps} ({progress}%)")
+    # for step in range(1, total_steps + 1):
+    #     # Simulate async heavy work. Replace this part with real Playwright logic.
+    #     await asyncio.sleep(100)
+    #     progress = int(step * 100 / total_steps)
+    #     report_progress(progress)
+    #     log(f"[{task_name}] step {step}/{total_steps} ({progress}%)")
+    async with async_playwright() as p:
+        context = await p.chromium.launch_persistent_context(
+            channel="msedge",
+            headless=False,
+            user_data_dir="user-data",
+        )
+        page = context.pages[0] if context.pages else await context.new_page()
+        await page.goto("https://www.baidu.com")
+        await page.wait_for_timeout(10000)
+        await context.close()
     log(f"Task finished: {task_name}")
 
 
@@ -157,6 +174,19 @@ class AsyncTaskManager:
         self._state.log("Cancellation requested")
         return {"ok": True, "message": "已发送取消请求", "status": TaskStatus.CANCELED}
 
+    def stop_silent(self) -> None:
+        """Best-effort stop used by window lifecycle hooks."""
+        with self._lock:
+            task = self._task
+        if task is not None and not task.done():
+            self._loop.call_soon_threadsafe(task.cancel)
+            self._state.status = TaskStatus.CANCELED
+
+    def shutdown(self) -> None:
+        """Cancel running task and stop background event loop."""
+        self.stop_silent()
+        self._loop.call_soon_threadsafe(self._loop.stop)
+
 
 class Api:
     def __init__(self) -> None:
@@ -185,6 +215,13 @@ class Api:
     def clear_task_log(self) -> ActionResult:
         self._state.clear_log()
         return {"ok": True, "message": "日志已清空", "status": self._state.status}
+
+    def on_window_closing(self) -> None:
+        self._state.begin_closing()
+        self._manager.stop_silent()
+
+    def on_window_closed(self) -> None:
+        self._manager.shutdown()
 
 
 def set_interval(interval_seconds: float):
@@ -264,6 +301,9 @@ def main() -> None:
     window = webview.create_window("pywebview-start", entrypoint, js_api=api)
     api.attach_window(window)
     window.events.loaded += lambda: update_ticker(window)
+    # Ensure async tasks are canceled when user closes window directly.
+    window.events.closing += lambda: api.on_window_closing()
+    window.events.closed += lambda: api.on_window_closed()
     webview.start(debug=args.dev)
 
 
