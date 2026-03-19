@@ -1,5 +1,9 @@
 import { useState } from "react"
-import { IconBolt, IconCircleCheckFilled, IconLoader2 } from "@tabler/icons-react"
+import {
+  IconBolt,
+  IconCircleCheckFilled,
+  IconLoader2,
+} from "@tabler/icons-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -19,10 +23,14 @@ type BasicTaskResult = {
 export function App() {
   const { isReady, callApi } = usePythonBridge()
   const [taskName, setTaskName] = useState("demo task")
+  const [heavyTaskName, setHeavyTaskName] = useState("heavy-demo")
   const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<BasicTaskResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const ticker = usePythonState<number>("ticker")
+  const taskStatus = usePythonState<string>("task_status")
+  const taskLog = usePythonState<string>("task_log")
+  const taskProgress = usePythonState<number>("task_progress")
 
   const runTask = async () => {
     setError(null)
@@ -39,6 +47,30 @@ export function App() {
   }
 
   const canRun = isReady && !isRunning
+
+  const startHeavyTask = async () => {
+    try {
+      await callApi("start_heavy_task", heavyTaskName)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const stopHeavyTask = async () => {
+    try {
+      await callApi("stop_heavy_task")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const clearTaskLog = async () => {
+    try {
+      await callApi("clear_task_log")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   return (
     <div className="min-h-svh bg-slate-50 p-4">
@@ -68,10 +100,17 @@ export function App() {
               />
             </div>
 
-            <Button type="button" onClick={() => void runTask()} disabled={!canRun}>
+            <Button
+              type="button"
+              onClick={() => void runTask()}
+              disabled={!canRun}
+            >
               {isRunning ? (
                 <>
-                  <IconLoader2 data-icon="inline-start" className="animate-spin" />
+                  <IconLoader2
+                    data-icon="inline-start"
+                    className="animate-spin"
+                  />
                   调用中...
                 </>
               ) : (
@@ -88,6 +127,58 @@ export function App() {
             <p className="text-xs text-slate-500">
               Python state ticker: {typeof ticker === "number" ? ticker : "-"}
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>异步重任务管理</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="heavyTaskName">重任务名称</Label>
+              <Input
+                id="heavyTaskName"
+                value={heavyTaskName}
+                onChange={(event) => setHeavyTaskName(event.target.value)}
+                placeholder="例如: playwright-job"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={() => void startHeavyTask()}
+                disabled={!isReady || taskStatus === "running"}
+              >
+                开始任务
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void stopHeavyTask()}
+                disabled={!isReady || taskStatus !== "running"}
+              >
+                停止任务
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void clearTaskLog()}
+                disabled={!isReady}
+              >
+                清空日志
+              </Button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              status: {taskStatus ?? "idle"} | progress:{" "}
+              {typeof taskProgress === "number" ? `${taskProgress}%` : "0%"}
+            </p>
+
+            <pre className="max-h-48 overflow-auto rounded-md border bg-slate-50 p-2 text-xs text-slate-700">
+              {taskLog?.trim() ? taskLog : "暂无日志"}
+            </pre>
           </CardContent>
         </Card>
 

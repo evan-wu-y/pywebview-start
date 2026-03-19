@@ -26,6 +26,21 @@ declare global {
           platform: string
           python_version: string
         }>
+        start_heavy_task: (task_name?: string) => Promise<{
+          ok: boolean
+          message: string
+          status: string
+        }>
+        stop_heavy_task: () => Promise<{
+          ok: boolean
+          message: string
+          status: string
+        }>
+        clear_task_log: () => Promise<{
+          ok: boolean
+          message: string
+          status: string
+        }>
       }
     }
   }
