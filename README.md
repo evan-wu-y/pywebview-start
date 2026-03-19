@@ -1,21 +1,46 @@
-# React + TypeScript + Vite + shadcn/ui
+# pywebview-start
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+`pywebview-start` 是一个 `shadcn + React + pywebview` 桌面应用启动模板。
 
-## Adding components
+默认示例只保留了一个最基础的前后端通信任务：前端调用 Python `run_basic_task`，并把返回结果展示在页面上。
 
-To add components to your app, run the following command:
+## 环境要求
+
+- Python 3.13+
+- Node.js + pnpm
+
+## 安装依赖
 
 ```bash
-npx shadcn@latest add button
+pnpm install
+uv sync
 ```
 
-This will place the ui components in the `src/components` directory.
+## 常用命令
 
-## Using components
+- `pnpm dev`: 启动前端开发服务器（Vite）
+- `pnpm frontend:dev`: 构建前端到 `gui/`（不压缩）
+- `pnpm frontend:prod`: 构建前端到 `gui/`（压缩）
+- `pnpm start`: 构建 `gui/` 后启动 pywebview 桌面应用
+- `pnpm python:start:dev`: pywebview 直连开发服务器（默认 `http://localhost:5173`）
 
-To use the components in your app, import them as follows:
+## 开发模式
 
-```tsx
-import { Button } from "@/components/ui/button"
+1. 终端 A：`pnpm dev`
+2. 终端 B：`pnpm python:start:dev`
+
+如需修改开发服务器地址，可设置环境变量 `PYWEBVIEW_DEV_SERVER_URL`。
+
+## 打包 Windows EXE
+
+```bash
+pnpm build:windows
 ```
+
+可选清理后重打包：
+
+```bash
+pnpm build:windows:clean
+```
+
+打包输出目录为 `dist/pywebview-start/`，主程序为 `pywebview-start.exe`。
